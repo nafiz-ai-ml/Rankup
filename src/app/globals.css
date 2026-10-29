@@ -4,6 +4,9 @@
 
 @layer base {
   :root {
+    --font-geist-sans: "Geist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-geist-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
     --bg-body: #f8fafc;
     --bg-sidebar: #ffffff;
     --bg-surface: #ffffff;
@@ -39,11 +42,13 @@
   }
 }
 
-body {
+html, body {
   background-color: var(--bg-body);
   color: var(--text-primary);
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
   min-height: 100vh;
 }
 

@@ -79,19 +79,19 @@ function HomePageContent() {
   };
 
   return (
-    <div className="flex flex-col gap-10 py-4 sm:py-6">
+    <div className="flex flex-col gap-8 sm:gap-10 py-2 sm:py-6 w-full max-w-full overflow-hidden">
       {/* 1. Live Social Proof Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl glass-surface border border-slate-200/80 dark:border-white/10 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 live-indicator" />
-          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 p-3 sm:p-4 rounded-2xl glass-surface border border-slate-200/80 dark:border-white/10 shadow-sm w-full">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 live-indicator shrink-0" />
+          <span className="text-[11px] sm:text-xs font-semibold text-slate-800 dark:text-slate-200">
             <strong>17 founders online</strong> • 1,240 visitors today
           </span>
         </div>
-        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <span>7-Day Active Placement</span>
+        <div className="flex items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
+          <span>7-Day Active</span>
           <span>•</span>
-          <span className="text-blue-500 font-semibold">15-min Boost Protection</span>
+          <span className="text-blue-500 font-semibold">15-min Boost Window</span>
         </div>
       </div>
 
