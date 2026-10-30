@@ -62,11 +62,16 @@ export function ListingCard({
           : "glass-surface border-slate-200/80 dark:border-white/10 hover:border-blue-500/30 hover:-translate-y-0.5 shadow-sm"
       }`}
     >
-      {/* Rank #1 Crown Badge Overlay */}
+      {/* Rank #1 Crown Badge Header (Inside card to avoid overflow clipping) */}
       {isRank1 && (
-        <div className="absolute -top-3 left-4 sm:left-6 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[10px] font-extrabold shadow-md tracking-wider uppercase">
-          <Crown className="w-3 h-3" />
-          <span>Current #1 Leader</span>
+        <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-amber-500/20 w-full">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[10px] font-extrabold shadow-sm tracking-wider uppercase">
+            <Crown className="w-3.5 h-3.5 text-amber-200 fill-amber-200" />
+            <span>Current #1 Leader</span>
+          </div>
+          <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+            Gold Podium Champion
+          </span>
         </div>
       )}
 
