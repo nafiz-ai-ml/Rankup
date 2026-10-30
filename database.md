@@ -145,61 +145,55 @@ To avoid race conditions when two users pay at the exact same second to claim `#
 
 ```sql
 -- Lock ID constant: 918273645
+drop function if exists process_successful_payment(uuid, text, text, text, integer, jsonb);
+
 create or replace function process_successful_payment(
+  p_payment_id uuid,
   p_listing_id uuid,
   p_event_id text,
   p_transaction_id text,
   p_email text,
-  p_amount integer,
+  p_paid_minor bigint,
   p_payload jsonb
-) returns void as $$
+) returns text as $$
 declare
-  v_inserted boolean;
+  v_amount integer;
+  v_status text;
 begin
-  -- 1. Acquire transaction-level advisory lock
   perform pg_advisory_xact_lock(918273645);
 
-  -- 2. Idempotent insert of payment record
-  insert into payments (
-    listing_id,
-    paddle_event_id,
-    paddle_transaction_id,
-    paddle_customer_email,
-    amount_usd,
-    status,
-    boost_window_expires_at,
-    raw_payload
-  ) values (
-    p_listing_id,
-    p_event_id,
-    p_transaction_id,
-    p_email,
-    p_amount,
-    'succeeded',
-    now() + interval '15 minutes',
-    p_payload
-  )
-  on conflict (paddle_event_id) do nothing;
-
-  -- 3. If duplicate event, exit gracefully
-  if not found then
-    return;
+  if exists (select 1 from payments where paddle_event_id = p_event_id) then
+    return 'duplicate';
   end if;
 
-  -- 4. Update listing spend totals
+  select amount_usd, status into v_amount, v_status
+  from payments
+  where id = p_payment_id and listing_id = p_listing_id
+  for update;
+
+  if not found then return 'not_found'; end if;
+  if v_status = 'succeeded' then return 'duplicate'; end if;
+  if p_paid_minor <> v_amount::bigint * 100 then return 'mismatch'; end if;
+
+  update payments set
+    status = 'succeeded',
+    paddle_event_id = p_event_id,
+    paddle_transaction_id = p_transaction_id,
+    paddle_customer_email = p_email,
+    boost_window_expires_at = now() + interval '15 minutes',
+    raw_payload = p_payload
+  where id = p_payment_id;
+
   insert into listing_spend (listing_id, all_time_total, today_total, today_date, last_paid_at)
-  values (p_listing_id, p_amount, p_amount, current_date, now())
+  values (p_listing_id, v_amount, v_amount, current_date, now())
   on conflict (listing_id) do update set
-    all_time_total = listing_spend.all_time_total + p_amount,
-    today_total = case 
-      when listing_spend.today_date = current_date then listing_spend.today_total + p_amount
-      else p_amount
-    end,
+    all_time_total = listing_spend.all_time_total + v_amount,
+    today_total = case when listing_spend.today_date = current_date
+                       then listing_spend.today_total + v_amount else v_amount end,
     today_date = current_date,
     last_paid_at = now(),
     updated_at = now();
 
-  -- 5. Activate or extend listing visibility by 7 full days
   update listings set
     status = 'active',
     first_paid_at = coalesce(first_paid_at, now()),
@@ -207,6 +201,10 @@ begin
     updated_at = now()
   where id = p_listing_id;
 
+  insert into rank_events (listing_id, event_type, amount_usd)
+  values (p_listing_id, 'boosted', v_amount);
+
+  return 'ok';
 end;
 $$ language plpgsql;
 ```

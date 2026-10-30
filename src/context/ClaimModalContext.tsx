@@ -26,6 +26,17 @@ interface ClaimModalContextType {
   activateBoostWindow: (title: string, rank: number) => void;
 }
 
+async function waitForPayment(paymentId: string, timeoutMs = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const r = await fetch(`/api/checkout/status?paymentId=${paymentId}`, { cache: "no-store" });
+    const j = await r.json();
+    if (j.status === "succeeded") return true;
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+  return false;
+}
+
 const ClaimModalContext = React.createContext<ClaimModalContextType | undefined>(undefined);
 
 export function ClaimModalProvider({ children }: { children: React.ReactNode }) {
@@ -39,6 +50,7 @@ export function ClaimModalProvider({ children }: { children: React.ReactNode }) 
     destination: string;
     amountUsd: number;
     rank: number;
+    pendingConfirmation?: boolean;
   } | null>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = React.useState(false);
 
@@ -86,20 +98,18 @@ export function ClaimModalProvider({ children }: { children: React.ReactNode }) 
         throw new Error(sessionData.error || "Failed to create checkout session.");
       }
 
-      // 2. Open Paddle Checkout (or test checkout simulation)
+      // 2. Open Paddle Checkout
       await openPaddleCheckout({
-        listingId: sessionData.listingId,
-        paymentId: sessionData.paymentId,
-        amountUsd: data.bidAmount,
-        title: data.title,
-        destination: data.destination,
-        onSuccess: () => {
+        transactionId: sessionData.transactionId,
+        onSuccess: async () => {
           closeClaimModal();
+          const confirmed = await waitForPayment(sessionData.paymentId);
           setSuccessData({
             title: data.title,
             destination: data.destination,
             amountUsd: data.bidAmount,
             rank: data.targetRank,
+            pendingConfirmation: !confirmed,
           });
           setIsSuccessModalOpen(true);
           // Activate the 15-Minute Boost Window

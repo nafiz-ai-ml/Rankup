@@ -23,7 +23,15 @@ export async function middleware(request: NextRequest) {
     }
 
     const sessionCookie = request.cookies.get("rankup_admin_session")?.value;
-    const secret = process.env.ADMIN_SECRET_KEY || "rankupadmin2026";
+    const secret = process.env.ADMIN_SECRET_KEY;
+
+    if (!secret) {
+      // If ADMIN_SECRET_KEY is missing, deny access
+      const loginUrl = new URL("/admin/login", request.url);
+      loginUrl.searchParams.set("from", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
     const expectedToken = await computeExpectedToken(secret);
 
     if (!sessionCookie || sessionCookie !== expectedToken) {

@@ -12,6 +12,7 @@ interface PaymentSuccessModalProps {
     destination: string;
     amountUsd: number;
     rank: number;
+    pendingConfirmation?: boolean;
   } | null;
 }
 
@@ -74,10 +75,12 @@ export function PaymentSuccessModal({
             <span>Payment Confirmed</span>
           </div>
           <h3 className="text-2xl font-black text-slate-900 dark:text-white">
-            You Claimed Rank #{data.rank}!
+            {data.pendingConfirmation ? "Payment Received!" : `You Claimed Rank #${data.rank}!`}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate px-4">
-            {data.title} is now active on the public leaderboard.
+            {data.pendingConfirmation
+              ? `${data.title} payment was received; your rank will update shortly.`
+              : `${data.title} is now active on the public leaderboard.`}
           </p>
         </div>
 

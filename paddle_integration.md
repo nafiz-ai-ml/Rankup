@@ -155,13 +155,14 @@ export async function POST(req: NextRequest) {
   const customerEmail = transaction.customer?.email || null;
   const amountUsd = Math.round(parseFloat(transaction.details.totals.total) / 100);
 
-  // 3. Execute Postgres transaction with Advisory Lock
-  const { error } = await supabaseAdmin.rpc('process_successful_payment', {
-    p_listing_id: listingId,
-    p_event_id: eventId,
-    p_transaction_id: transactionId,
+  // 3. Execute Postgres transaction with Advisory Lock and pending payment validation
+  const { data: result, error } = await supabaseAdmin.rpc('process_successful_payment', {
+    p_payment_id: customData.payment_id,
+    p_listing_id: customData.listing_id,
+    p_event_id: event.eventId,
+    p_transaction_id: transaction.id,
     p_email: customerEmail,
-    p_amount: amountUsd,
+    p_paid_minor: paidMinor,
     p_payload: event
   });
 

@@ -25,32 +25,44 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
       !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")
     ) {
-      const { data: pmt } = await supabaseAdmin
+      const { data: pmt, error: pmtErr } = await supabaseAdmin
         .from("payments")
         .select("*")
         .eq("id", payment_id)
-        .single();
+        .maybeSingle();
+
+      if (pmtErr) {
+        return NextResponse.json({ error: pmtErr.message }, { status: 500 });
+      }
 
       if (pmt) {
-        // Mark payment as succeeded
-        await supabaseAdmin
-          .from("payments")
-          .update({ status: "succeeded" })
-          .eq("id", payment_id);
-
-        // Execute advisory lock payment processor
-        await supabaseAdmin.rpc("process_successful_payment", {
+        // Execute advisory lock payment processor without pre-setting status
+        const { data: result, error: rpcError } = await supabaseAdmin.rpc("process_successful_payment", {
+          p_payment_id: pmt.id,
           p_listing_id: pmt.listing_id,
-          p_amount: pmt.amount_usd,
-          p_paddle_event_id: pmt.paddle_event_id || `manual_retry_${Date.now()}`,
-          p_paddle_txn_id: pmt.paddle_transaction_id || `manual_txn_${Date.now()}`,
+          p_event_id: pmt.paddle_event_id || `manual_retry_${pmt.id}`,
+          p_transaction_id: pmt.paddle_transaction_id || `manual_txn_${pmt.id}`,
           p_email: pmt.paddle_customer_email,
-          p_raw_payload: pmt.raw_payload || {},
+          p_paid_minor: pmt.amount_usd * 100,
+          p_payload: pmt.raw_payload || {},
         });
+
+        if (rpcError) {
+          console.error("RPC error during payment retry:", rpcError);
+          return NextResponse.json({ error: rpcError.message || "RPC failed" }, { status: 500 });
+        }
+
+        if (result === "not_found") {
+          return NextResponse.json({ error: "Payment or listing record not found." }, { status: 404 });
+        }
+        if (result === "mismatch") {
+          return NextResponse.json({ error: "Payment amount mismatch." }, { status: 400 });
+        }
 
         return NextResponse.json({
           success: true,
-          message: "Payment re-processed successfully via process_successful_payment.",
+          result,
+          message: `Payment re-processed successfully with result: ${result}.`,
         });
       }
     }
