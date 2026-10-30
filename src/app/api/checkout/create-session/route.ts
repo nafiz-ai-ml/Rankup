@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateNormalizedKey } from "@/lib/scraper/extractor";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { paddle } from "@/lib/paddle/server";
+import { MOCK_CATEGORIES } from "@/lib/mockData";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -80,6 +81,52 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Resolve category ID to a valid database category UUID
+      const matchedCat =
+        MOCK_CATEGORIES.find(
+          (c) =>
+            c.id === categoryId ||
+            c.slug === categoryId ||
+            (c.id.startsWith("c1000000") && categoryId === `c${c.sort_order}`) ||
+            c.id.endsWith(String(categoryId).replace(/^c/, "").padStart(12, "0"))
+        ) || MOCK_CATEGORIES[0];
+
+      let validCategoryId: string = matchedCat.id;
+
+      // Check if category exists in database
+      const { data: dbCat } = await supabaseAdmin
+        .from("categories")
+        .select("id")
+        .eq("slug", matchedCat.slug)
+        .maybeSingle();
+
+      if (dbCat?.id) {
+        validCategoryId = dbCat.id;
+      } else {
+        // Ensure category exists in categories table so foreign key constraint is satisfied
+        const { data: newCat, error: catUpsertErr } = await supabaseAdmin
+          .from("categories")
+          .upsert(
+            {
+              id: matchedCat.id,
+              slug: matchedCat.slug,
+              name: matchedCat.name,
+              description: matchedCat.description,
+              icon_name: matchedCat.icon_name,
+              sort_order: matchedCat.sort_order,
+            },
+            { onConflict: "slug" }
+          )
+          .select("id")
+          .maybeSingle();
+
+        if (newCat?.id) {
+          validCategoryId = newCat.id;
+        } else if (catUpsertErr) {
+          console.warn("Category auto-seed notice:", catUpsertErr);
+        }
+      }
+
       // Check if existing listing with normalized_key
       const { data: existing, error: existingErr } = await supabaseAdmin
         .from("listings")
@@ -90,7 +137,7 @@ export async function POST(req: NextRequest) {
       if (existingErr) {
         console.error("Listing query error:", existingErr);
         return NextResponse.json(
-          { error: "Database query failed." },
+          { error: "Database query failed: " + existingErr.message },
           { status: 500 }
         );
       }
@@ -118,14 +165,14 @@ export async function POST(req: NextRequest) {
           title: title.slice(0, 60),
           short_description: description ? description.slice(0, 140) : null,
           favicon_url: faviconUrl,
-          category_id: categoryId,
+          category_id: validCategoryId,
           status: "pending_payment",
         });
 
         if (insertErr) {
           console.error("Listing insert error:", insertErr);
           return NextResponse.json(
-            { error: "Failed to create listing in database." },
+            { error: insertErr.message || "Failed to create listing in database." },
             { status: 500 }
           );
         }
@@ -142,7 +189,7 @@ export async function POST(req: NextRequest) {
       if (pmtErr) {
         console.error("Payment insert error:", pmtErr);
         return NextResponse.json(
-          { error: "Failed to create pending payment record." },
+          { error: pmtErr.message || "Failed to create pending payment record." },
           { status: 500 }
         );
       }
