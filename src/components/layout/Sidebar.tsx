@@ -309,11 +309,11 @@ export function Sidebar({ onClaimClick }: SidebarProps) {
         <div className="flex items-center justify-between pt-1">
           <ThemeToggle />
           <div className="flex items-center gap-2 text-[10px] text-slate-400 dark:text-slate-500">
-            <Link href="/rules#terms" className="hover:text-blue-500">
+            <Link href="/terms" className="hover:text-blue-500">
               Terms
             </Link>
             <span>•</span>
-            <Link href="/rules#privacy" className="hover:text-blue-500">
+            <Link href="/privacy" className="hover:text-blue-500">
               Privacy
             </Link>
           </div>

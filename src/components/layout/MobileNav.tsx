@@ -255,9 +255,9 @@ export function MobileNav({ onClaimClick }: MobileNavProps) {
               <Plus className="w-4 h-4" /> Claim a Rank
             </button>
             <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <Link href="/rules#terms" className="hover:text-slate-600 dark:hover:text-slate-200">Terms</Link>
+              <Link href="/terms" className="hover:text-slate-600 dark:hover:text-slate-200">Terms</Link>
               <span>•</span>
-              <Link href="/rules#privacy" className="hover:text-slate-600 dark:hover:text-slate-200">Privacy</Link>
+              <Link href="/privacy" className="hover:text-slate-600 dark:hover:text-slate-200">Privacy</Link>
               <span>•</span>
               <Link href="/rules#refund-policy" className="hover:text-slate-600 dark:hover:text-slate-200">No Refund</Link>
             </div>

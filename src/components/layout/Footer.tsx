@@ -190,7 +190,7 @@ export function Footer() {
             <ul className="space-y-2 text-xs">
               <li>
                 <Link
-                  href="/rules#terms"
+                  href="/terms"
                   className="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors"
                 >
                   Terms of Service
@@ -198,7 +198,7 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/rules#privacy"
+                  href="/privacy"
                   className="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors"
                 >
                   Privacy Policy

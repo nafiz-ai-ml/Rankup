@@ -27,7 +27,7 @@ import {
   Activity,
   Award,
 } from "lucide-react";
-import { RankEvent } from "@/types/database";
+import { RankEvent, Listing } from "@/types/database";
 
 // Real-world authentic tech stack specifications for featured seed listings
 const AUTHENTIC_TECH_SPECS: Record<
@@ -140,13 +140,32 @@ function ProductDetailContent() {
   const { openClaimModal } = useClaimModal();
   const [copied, setCopied] = React.useState(false);
 
-  // Find listing from mockData or fallback
+  // Live database listing state
+  const [liveListing, setLiveListing] = React.useState<Listing | null>(null);
+
+  React.useEffect(() => {
+    async function fetchLiveProduct() {
+      try {
+        const res = await fetch(`/api/listings?slug=${slug}`, { cache: "no-store" });
+        const data = await res.json();
+        if (data?.listing) {
+          setLiveListing(data.listing);
+        }
+      } catch (err) {
+        console.warn("Live listing fetch:", err);
+      }
+    }
+    fetchLiveProduct();
+  }, [slug]);
+
+  // Find listing from live data, or fallback
   const listing = React.useMemo(() => {
+    if (liveListing) return liveListing;
     return (
       MOCK_LISTINGS.find((item) => item.slug === slug || item.id === slug) ||
       MOCK_LISTINGS[0]
     );
-  }, [slug]);
+  }, [liveListing, slug]);
 
   const currentRank = listing.rank || 1;
   const spendTotal = listing.spend?.all_time_total || 102;

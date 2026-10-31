@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
-import { MOCK_CATEGORIES, MOCK_LISTINGS } from "@/lib/mockData";
+import { MOCK_CATEGORIES } from "@/lib/mockData";
 import { Listing } from "@/types/database";
 import { HeroStepper } from "@/components/leaderboard/HeroStepper";
 import { HeroClaimBar } from "@/components/claim/HeroClaimBar";
@@ -12,7 +12,7 @@ import { TableView } from "@/components/leaderboard/TableView";
 import { SideWidgets } from "@/components/leaderboard/SideWidgets";
 import { ProofStrip } from "@/components/leaderboard/ProofStrip";
 import { useClaimModal } from "@/context/ClaimModalContext";
-import { Trophy, Shield, Zap, Info } from "lucide-react";
+import { Trophy, Shield, Zap, Info, Loader2, ArrowLeft, ArrowRight } from "lucide-react";
 
 function HomePageContent() {
   const searchParams = useSearchParams();
@@ -24,42 +24,83 @@ function HomePageContent() {
   );
   const [selectedCategoryId, setSelectedCategoryId] = React.useState<string | null>(null);
   const [viewMode, setViewMode] = React.useState<"cards" | "table">("cards");
-  const [prefilledUrl, setPrefilledUrl] = React.useState("");
+  const [currentPage, setCurrentPage] = React.useState(1);
+
+  // Live database listings state
+  const [listings, setListings] = React.useState<Listing[]>([]);
+  const [allTimeTopListings, setAllTimeTopListings] = React.useState<Listing[]>([]);
+  const [totalCount, setTotalCount] = React.useState(0);
+  const [totalPages, setTotalPages] = React.useState(1);
+  const [todayLeaderSpend, setTodayLeaderSpend] = React.useState(0);
+  const [allTimeLeaderSpend, setAllTimeLeaderSpend] = React.useState(0);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   // Sync board with query param if present
   React.useEffect(() => {
     if (boardParam === "all-time" || boardParam === "today") {
       setActiveBoard(boardParam);
+      setCurrentPage(1);
     }
   }, [boardParam]);
 
-  // Filter & Sort Listings according to ranking rules
-  const sortedListings = React.useMemo(() => {
-    let list = [...MOCK_LISTINGS];
+  // Reset page when category or board changes
+  const handleBoardChange = (board: "all-time" | "today") => {
+    setActiveBoard(board);
+    setCurrentPage(1);
+  };
 
-    // 1. Filter by category if selected
-    if (selectedCategoryId) {
-      list = list.filter((item) => item.category_id === selectedCategoryId);
+  const handleCategorySelect = (catId: string | null) => {
+    setSelectedCategoryId(catId);
+    setCurrentPage(1);
+  };
+
+  // Fetch live listings from /api/listings
+  const fetchListings = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const categoryQuery = selectedCategoryId ? `&category=${selectedCategoryId}` : "";
+      const res = await fetch(
+        `/api/listings?board=${activeBoard}${categoryQuery}&page=${currentPage}&limit=20`,
+        { cache: "no-store" }
+      );
+      const data = await res.json();
+
+      if (data && Array.isArray(data.listings)) {
+        setListings(data.listings);
+        setTotalCount(data.totalCount || 0);
+        setTotalPages(data.totalPages || 1);
+        setTodayLeaderSpend(data.todayLeaderSpend || 0);
+        setAllTimeLeaderSpend(data.allTimeLeaderSpend || 0);
+      }
+    } catch (err) {
+      console.error("Failed to fetch live listings:", err);
+    } finally {
+      setIsLoading(false);
     }
+  }, [activeBoard, selectedCategoryId, currentPage]);
 
-    // 2. Sort by active board
-    if (activeBoard === "today") {
-      list.sort((a, b) => (b.spend?.today_total ?? 0) - (a.spend?.today_total ?? 0));
-    } else {
-      list.sort((a, b) => (b.spend?.all_time_total ?? 0) - (a.spend?.all_time_total ?? 0));
+  // Fetch all-time top listings once for side widget
+  React.useEffect(() => {
+    async function fetchSideWidget() {
+      try {
+        const res = await fetch(`/api/listings?board=all-time&limit=10`, { cache: "no-store" });
+        const data = await res.json();
+        if (data && Array.isArray(data.listings)) {
+          setAllTimeTopListings(data.listings);
+        }
+      } catch (err) {
+        console.error("Failed to fetch side widget listings:", err);
+      }
     }
+    fetchSideWidget();
+  }, []);
 
-    return list;
-  }, [activeBoard, selectedCategoryId]);
+  React.useEffect(() => {
+    fetchListings();
+  }, [fetchListings]);
 
   // Current #1 leader spend for stepper calculation
-  const currentLeaderSpend = React.useMemo(() => {
-    if (sortedListings.length === 0) return 0;
-    const topItem = sortedListings[0];
-    return activeBoard === "today"
-      ? topItem.spend?.today_total ?? 0
-      : topItem.spend?.all_time_total ?? 0;
-  }, [sortedListings, activeBoard]);
+  const currentLeaderSpend = activeBoard === "today" ? todayLeaderSpend : allTimeLeaderSpend;
 
   // Handle Outbid click on any card -> Opens ClaimModal directly pre-filled
   const handleOutbidClick = (listing: Listing) => {
@@ -85,7 +126,7 @@ function HomePageContent() {
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 live-indicator shrink-0" />
           <span className="text-[11px] sm:text-xs font-semibold text-slate-800 dark:text-slate-200">
-            <strong>17 founders online</strong> • 1,240 visitors today
+            <strong>100% Live Leaderboard</strong> • Real-time Paddle Ledger
           </span>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
@@ -106,7 +147,7 @@ function HomePageContent() {
       {/* 3. Hero Claim Bar */}
       <HeroClaimBar
         categories={MOCK_CATEGORIES}
-        initialValue={prefilledUrl}
+        initialValue=""
         onSubmit={handleClaimSubmit}
       />
 
@@ -151,31 +192,73 @@ function HomePageContent() {
           <BoardControls
             categories={MOCK_CATEGORIES}
             activeBoard={activeBoard}
-            onBoardChange={setActiveBoard}
+            onBoardChange={handleBoardChange}
             selectedCategoryId={selectedCategoryId}
-            onCategorySelect={setSelectedCategoryId}
+            onCategorySelect={handleCategorySelect}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
           />
 
-          {/* Leaderboard View: Cards or Table */}
-          {sortedListings.length === 0 ? (
-            <div className="p-12 text-center rounded-2xl glass-surface border border-slate-200 dark:border-white/10 space-y-2">
-              <Info className="w-6 h-6 text-slate-400 mx-auto" />
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                No active listings found in this category yet.
-              </p>
-              <p className="text-xs text-slate-400">
-                Be the first to claim #1 for only $5!
+          {/* Leaderboard View: Loading / Empty / Cards / Table */}
+          {isLoading ? (
+            <div className="p-12 text-center rounded-3xl glass-surface border border-slate-200 dark:border-white/10 space-y-3">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto" />
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                Loading live leaderboard...
               </p>
             </div>
+          ) : listings.length === 0 ? (
+            activeBoard === "today" ? (
+              /* Fresh Empty State for Today's Board */
+              <div className="p-8 sm:p-12 text-center rounded-3xl glass-surface border border-slate-200 dark:border-white/10 shadow-lg space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto shadow-inner">
+                  <Trophy className="w-7 h-7" />
+                </div>
+                <div className="space-y-1.5 max-w-md mx-auto">
+                  <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
+                    The podium is wide open!
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                    No products have placed bids yet today. Claim the #1 spot on today&apos;s leaderboard for only $5!
+                  </p>
+                </div>
+                <button
+                  onClick={() => openClaimModal({ bidAmount: 5, categoryId: selectedCategoryId || undefined })}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/25 inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  <Zap className="w-4 h-4 text-amber-300" />
+                  <span>Claim #1 Today</span>
+                </button>
+              </div>
+            ) : (
+              /* Empty State for All-Time Board */
+              <div className="p-8 sm:p-12 text-center rounded-3xl glass-surface border border-slate-200 dark:border-white/10 shadow-lg space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center mx-auto shadow-inner">
+                  <Info className="w-7 h-7" />
+                </div>
+                <div className="space-y-1.5 max-w-md mx-auto">
+                  <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
+                    Be the first to claim a spot on the leaderboard!
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+                    Every bid guarantees 7 full days of verified placement and high-intent founder traffic.
+                  </p>
+                </div>
+                <button
+                  onClick={() => openClaimModal({ bidAmount: 5, categoryId: selectedCategoryId || undefined })}
+                  className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/25 inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  <span>Claim a Rank for $5</span>
+                </button>
+              </div>
+            )
           ) : viewMode === "cards" ? (
             <div className="space-y-3.5">
-              {sortedListings.map((item, index) => (
+              {listings.map((item, index) => (
                 <ListingCard
                   key={item.id}
                   listing={item}
-                  rank={index + 1}
+                  rank={(currentPage - 1) * 20 + index + 1}
                   activeBoard={activeBoard}
                   onOutbidClick={handleOutbidClick}
                 />
@@ -183,17 +266,45 @@ function HomePageContent() {
             </div>
           ) : (
             <TableView
-              listings={sortedListings}
+              listings={listings}
               activeBoard={activeBoard}
               onOutbidClick={handleOutbidClick}
             />
+          )}
+
+          {/* Pagination Controls (For 20+ listings) */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-white/10 text-xs">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1 || isLoading}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 font-bold text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-white/5 transition-all inline-flex items-center gap-1.5"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Previous</span>
+              </button>
+
+              <span className="font-mono text-slate-500 dark:text-slate-400">
+                Page <strong className="text-slate-900 dark:text-white">{currentPage}</strong> of{" "}
+                <strong className="text-slate-900 dark:text-white">{totalPages}</strong> ({totalCount} total)
+              </span>
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages || isLoading}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 font-bold text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-white/5 transition-all inline-flex items-center gap-1.5"
+              >
+                <span>Next</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
         </div>
 
         {/* Right Column: Desktop Side-Rail Widgets */}
         <div className="w-full lg:w-80 shrink-0 space-y-6">
           <SideWidgets
-            allTimeTopListings={MOCK_LISTINGS}
+            allTimeTopListings={allTimeTopListings}
             onListingClick={handleOutbidClick}
           />
         </div>
